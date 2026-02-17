@@ -1,0 +1,3 @@
+Extract Itau transactions from the following text.
+Text:
+{{DOCUMENT_TEXT}}

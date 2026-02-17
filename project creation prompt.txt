@@ -1,0 +1,180 @@
+Project: big-julius-ocr - Bank Statement OCR Microservice
+Overview
+Build a Python microservice that reads bank/credit card statement files from Google Drive, performs OCR using LLM APIs, and outputs structured CSV files to AWS S3.
+Core Requirements
+Technology Stack
+
+Language: Python 3.11+
+Framework: FastAPI
+Environment: Docker + local development
+Configuration: Environment variables (.env)
+Testing: pytest with >80% coverage
+
+Integrations
+
+Google Drive API: Read PDF/image files from specified folder
+LLM API: OpenAI GPT-4 (primary), with support for alternative providers (Anthropic, etc.)
+AWS S3: Write processed CSV files
+
+Supported Banks
+
+PicPay
+Itaú
+XP Investimentos
+
+API Endpoints
+1. POST /process-files
+Process all unprocessed files from Google Drive
+
+Query params: folder_id (optional)
+Returns: Job ID, list of processed files, summary stats
+Should handle concurrent processing
+
+2. GET /list-input-files
+List available files in Google Drive
+
+Query params: folder_id, processed (bool filter)
+Returns: File list with metadata (name, size, upload date, status)
+
+3. GET /health
+Basic health check
+
+Returns: {"status": "healthy", "timestamp": "..."}
+
+4. GET /check-all-connections
+Verify all external service connections
+
+Tests: Google Drive API, LLM API, AWS S3
+Returns: Status for each service with latency
+
+5. GET /show-config
+Display current configuration (sanitized)
+
+Returns: Config values with secrets masked
+Show: LLM provider, S3 bucket, Drive folder, log level
+
+CSV Output Schema
+date|description|installments|amount|balance|category
+
+date: DD-MM-YYYY format
+description: Transaction description (cleaned)
+installments: e.g., "1/12" or empty if not installment
+amount: Decimal with 2 places, negative for expenses. User "," as decimal separator. Do not use thousand separator.
+balance: Account balance after transaction
+category: Auto-categorized (Food, Transport, Bills, etc.)
+
+Architecture Requirements
+1. Prompt Management
+
+Store LLM prompts in separate JSON/YAML config file
+Structure: prompts/{bank_name}/extraction_prompt.txt
+Include: System prompt, few-shot examples per bank
+Allow prompt versioning
+
+2. Logging
+
+Log all requests/responses to logs/big-julius-ocr.log
+Include: timestamp, endpoint, user, request body (raw), response status, processing time
+Rotate logs daily
+Structured logging (JSON format)
+
+3. Error Handling
+
+Retry logic for API calls (exponential backoff)
+Graceful degradation if LLM fails
+Clear error messages for malformed statements
+
+4. Configuration (Environment Variables)
+# Google Drive
+GOOGLE_DRIVE_FOLDER_ID=
+GOOGLE_CREDENTIALS_PATH=
+
+# LLM
+LLM_PROVIDER=openai  # or anthropic, etc.
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+LLM_MODEL=gpt-4-turbo
+
+# AWS
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_S3_BUCKET=
+AWS_REGION=us-east-1
+
+# App
+LOG_LEVEL=INFO
+MAX_CONCURRENT_JOBS=5
+PROMPT_CONFIG_PATH=./prompts/config.yaml
+5. Docker Setup
+
+Multi-stage Dockerfile
+Include health check
+Volume mount for logs
+Expose port 8000
+docker-compose.yml with environment file
+
+Testing Requirements
+Unit Tests
+
+Test each endpoint with mocked dependencies
+Test OCR parsing logic for each bank format
+Test CSV generation
+Test error scenarios
+Mock Google Drive, LLM, and S3 calls
+
+Test Coverage
+
+Minimum 80% code coverage
+Include fixtures for sample bank statements
+Test prompt loading from config
+
+File Structure
+big-julius-ocr/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI app
+│   ├── api/
+│   │   ├── endpoints.py     # Route handlers
+│   │   └── models.py        # Pydantic models
+│   ├── services/
+│   │   ├── google_drive.py
+│   │   ├── llm_service.py
+│   │   ├── s3_service.py
+│   │   └── ocr_processor.py
+│   ├── utils/
+│   │   ├── logger.py
+│   │   ├── config.py
+│   │   └── validators.py
+│   └── prompts/
+│       ├── config.yaml
+│       ├── picpay/
+│       ├── itau/
+│       └── xp/
+├── tests/
+│   ├── test_endpoints.py
+│   ├── test_services.py
+│   └── fixtures/
+├── logs/
+├── .env.example
+├── .env
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── pytest.ini
+└── README.md
+Specific Implementation Notes
+
+OCR Strategy: Use LLM vision capabilities for PDF/image → structured data extraction
+Bank Detection: Auto-detect bank from logo/header in document
+Transaction Parsing: Handle multiple transaction formats per bank
+Category Assignment: Use LLM for intelligent categorization based on merchant names
+Idempotency: Track processed files to avoid duplication (metadata in S3 or database)
+
+Success Criteria
+
+Successfully processes statements from all 3 banks
+Accurate extraction (>95% field accuracy)
+Proper error handling and logging
+All tests passing
+Docker container runs successfully
+Complete documentation in README

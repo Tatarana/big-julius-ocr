@@ -1,0 +1,3 @@
+Extract PicPay transactions from the following text.
+Text:
+{{DOCUMENT_TEXT}}

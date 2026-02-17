@@ -1,0 +1,22 @@
+# Prompt Configuration
+banks:
+  picpay:
+    prompt_file: "picpay/extraction_prompt.txt"
+  itau:
+    prompt_file: "itau/extraction_prompt.txt"
+  xp:
+    prompt_file: "xp/extraction_prompt.txt"
+
+default_system_prompt: |
+  You are an expert data extraction AI. Extract the bank transactions from the provided text.
+  Output JSON format:
+  {
+    "transactions": [
+      {
+        "date": "DD-MM-YYYY",
+        "description": "string",
+        "amount": 10.50,
+        "balance": 100.00 (optional)
+      }
+    ]
+  }

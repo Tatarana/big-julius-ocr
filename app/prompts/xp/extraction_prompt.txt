@@ -1,0 +1,3 @@
+Extract XP Investimentos transactions from the following text.
+Text:
+{{DOCUMENT_TEXT}}

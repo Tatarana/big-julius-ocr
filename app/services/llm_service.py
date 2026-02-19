@@ -13,7 +13,7 @@ class LLMService:
             self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         # Add other providers here
 
-    def extract_transactions(self, text_content: str, bank_name: str, prompt_template: str) -> str:
+    def extract_transactions(self, text_content: str, bank_name: str, prompt_template: str, system_prompt: str = None) -> str:
         """
         Sends text to LLM to extract transactions.
         Returns raw JSON string response.
@@ -23,12 +23,14 @@ class LLMService:
 
         try:
             full_prompt = prompt_template.replace("{{DOCUMENT_TEXT}}", text_content)
+            
+            sys_prompt = system_prompt or "You are a helpful banking assistant that extracts transaction data from statements. Always respond in valid JSON format."
+            
             messages = [
-                {"role": "system", "content": "You are a helpful banking assistant that extracts transaction data from statements. Always respond in valid JSON format."},
+                {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": full_prompt}
             ]
             logger.info(f"Sending LLM request for bank={bank_name} (model={self.model}, prompt length={len(full_prompt)} chars)")
-            logger.info(f"LLM REQUEST BODY: {json.dumps(messages, ensure_ascii=False)}")
             
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -37,11 +39,11 @@ class LLMService:
                 response_format={"type": "json_object"}
             )
             result = response.choices[0].message.content
-            logger.info(f"LLM RESPONSE BODY: {result}")
+            logger.debug(f"LLM RESPONSE BODY: {result}")
             logger.info(f"LLM usage: {response.usage}")
             return result
         except Exception as e:
-            logger.error(f"LLM extraction failed: {str(e)}")
+            logger.error(f"LLM extraction failed for bank {bank_name}: {str(e)}")
             raise
 
     def categorize_transaction(self, description: str) -> str:

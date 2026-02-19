@@ -1,3 +1,6 @@
-Extract PicPay transactions from the following text.
+Extract all transactions from this PicPay statement. 
+Include date, description, and amount for each.
+Ensure amount is a number, not a string.
+
 Text:
 {{DOCUMENT_TEXT}}

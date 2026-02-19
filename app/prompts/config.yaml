@@ -8,15 +8,7 @@ banks:
     prompt_file: "xp/extraction_prompt.txt"
 
 default_system_prompt: |
-  You are an expert data extraction AI. Extract the bank transactions from the provided text.
-  Output JSON format:
-  {
-    "transactions": [
-      {
-        "date": "DD-MM-YYYY",
-        "description": "string",
-        "amount": 10.50,
-        "balance": 100.00 (optional)
-      }
-    ]
-  }
+  Extract bank transactions. Respond ONLY with a JSON object.
+  Minify output (no whitespace).
+  Format:
+  {"transactions": [{"date": "DD-MM-YYYY", "description": "text", "amount": 1.23, "balance": 4.56}]}

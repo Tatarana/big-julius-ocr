@@ -17,11 +17,14 @@ router = APIRouter()
 @router.post("/process-files", response_model=ProcessFilesResponse)
 async def process_files(request: ProcessFilesRequest, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())
-    folder_id = request.folder_id or settings.GOOGLE_DRIVE_FOLDER_ID
+    # Handle the case where Swagger UI sends "string" as default value
+    folder_id = request.folder_id
+    if not folder_id or folder_id.lower() == "string":
+        folder_id = settings.GOOGLE_DRIVE_FOLDER_ID
     
     logger.info(f"[Job {job_id}] Starting process-files for folder_id={folder_id}")
     
-    background_tasks.add_task(ocr_processor.process_folder, folder_id)
+    background_tasks.add_task(ocr_processor.process_folder, folder_id, job_id)
     
     return ProcessFilesResponse(
         job_id=job_id,
@@ -30,7 +33,11 @@ async def process_files(request: ProcessFilesRequest, background_tasks: Backgrou
 
 @router.get("/list-input-files", response_model=list[FileMetadata])
 async def list_input_files(folder_id: str = None):
-    fid = folder_id or settings.GOOGLE_DRIVE_FOLDER_ID
+    # Handle the case where Swagger UI sends "string" as default value
+    fid = folder_id
+    if not fid or fid.lower() == "string":
+        fid = settings.GOOGLE_DRIVE_FOLDER_ID
+        
     try:
         return drive_service.list_files_in_folder(fid)
     except Exception as e:
@@ -39,7 +46,7 @@ async def list_input_files(folder_id: str = None):
 @router.get("/check-all-connections", response_model=ConnectionCheckResponse)
 async def check_all_connections():
     drive_status = drive_service.check_connection()
-    llm_status = llm_service.check_connection()
+    llm_status = await llm_service.check_connection()
     s3_status = s3_service.check_connection()
     
     return ConnectionCheckResponse(
@@ -58,5 +65,6 @@ async def show_config():
         "AWS_REGION": settings.AWS_REGION,
         "AWS_S3_BUCKET": settings.AWS_S3_BUCKET,
         "GOOGLE_DRIVE_FOLDER_ID": settings.GOOGLE_DRIVE_FOLDER_ID,
-        "LOG_LEVEL": settings.LOG_LEVEL
+        "LOG_LEVEL": settings.LOG_LEVEL,
+        "DEBUG_SAVE_IMAGES": settings.DEBUG_SAVE_IMAGES
     }

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # App
     LOG_LEVEL: str = "INFO"
+    DEBUG_SAVE_IMAGES: bool = False
     MAX_CONCURRENT_JOBS: int = 5
     PROMPT_CONFIG_PATH: str = "./app/prompts/config.yaml"
 

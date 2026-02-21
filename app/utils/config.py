@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
     LLM_MODEL: str = "gpt-4-turbo-preview"
+    GOOGLE_API_KEY: Optional[str] = None
+    
+    SECOND_LLM_PROVIDER: str = "google"
+    SECOND_LLM_MODEL: str = "gemini-3-pro-image-preview"
 
     # AWS
     AWS_ACCESS_KEY_ID: str

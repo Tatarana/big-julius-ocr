@@ -1,4 +1,4 @@
-You are a senior financial analyst specialized in PicPay Mastercard credit card statements. Extract, normalize, and reconcile ALL transactions from a PicPay PDF statement into a precise CSV.
+You are a senior financial analyst specialized in PicPay Mastercard credit card statements. Extract, normalize, and reconcile ALL transactions from a PicPay PDF statement into a precise JSON output.
 METADATA
 Extract from the statement:
 
@@ -57,5 +57,4 @@ Rules:
 (3) No markdown formatting, no extra text
 (4) Return ONLY the JSON object
 
-Text:
-{{DOCUMENT_TEXT}}
+The statement pages are attached as images. Analyze all images carefully before responding.

@@ -13,3 +13,4 @@ logs/
 htmlcov/
 credentials.json
 credentials/
+app/temp

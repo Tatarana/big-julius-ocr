@@ -158,12 +158,32 @@ class OCRProcessor:
 
     # ----------------------------------------------------------- CSV + upload
 
-    def _transactions_to_csv(self, transactions: list[dict]) -> str:
-        cols = ["date", "description", "installments", "amount", "balance", "category"]
+    def _transactions_to_csv(
+        self,
+        transactions: list[dict],
+        bank: str,
+        doc_type: str,
+        extraction_date: str
+    ) -> str:
+        cols = [
+            "bank",
+            "doc_type",
+            "extraction_date",
+            "date",
+            "description",
+            "installments",
+            "amount",
+            "balance",
+            "category",
+        ]
         normalized = []
         for tx in transactions:
-            norm = {}
-            for col in cols:
+            norm = {
+                "bank": bank,
+                "doc_type": doc_type,
+                "extraction_date": extraction_date
+            }
+            for col in ["date", "description", "installments", "amount", "balance", "category"]:
                 val = tx.get(col, tx.get(col.capitalize(), ""))
                 if col in ("amount", "balance") and val is not None and val != "":
                     val = str(val).replace(".", ",")
@@ -252,7 +272,17 @@ class OCRProcessor:
 
             # ---- 7. Generate CSV
             logger.info(f"[Step 4/5] Generating CSV for {len(all_transactions)} transactions…")
-            csv_content = self._transactions_to_csv(all_transactions)
+            
+            # Map internal doc type to human-readable
+            human_doc_type = "bank statement" if stmt_type == "bankstatement" else "credit card statement"
+            extraction_date = datetime.now().strftime("%Y-%m-%d")
+            
+            csv_content = self._transactions_to_csv(
+                all_transactions,
+                bank=bank,
+                doc_type=human_doc_type,
+                extraction_date=extraction_date
+            )
             logger.info(f"[Step 4/5] CSV ready: {len(csv_content)} chars, {len(all_transactions)} rows")
 
             # ---- 8. Upload to S3

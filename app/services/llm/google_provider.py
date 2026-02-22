@@ -2,14 +2,15 @@
 app/services/llm/google_provider.py
 
 Google Gemini provider — supports 'chunks', 'images', and 'pdf' send modes.
+Using the new unified google-genai SDK.
 """
 import asyncio
-import json
 import tempfile
 import os
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from app.services.llm.base import BaseLLMProvider
 from app.utils.config import settings
@@ -25,19 +26,13 @@ class GeminiProvider(BaseLLMProvider):
 
     def __init__(self, model: str):
         self.model = model
-        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        self.client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 
     # ----------------------------------------------------------------- helpers
 
-    def _make_model(self, system_prompt: str) -> genai.GenerativeModel:
-        return genai.GenerativeModel(
-            model_name=self.model,
+    def _get_config(self, system_prompt: str) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
             system_instruction=system_prompt,
-        )
-
-    @property
-    def _gen_config(self) -> genai.types.GenerationConfig:
-        return genai.types.GenerationConfig(
             temperature=0,
             max_output_tokens=50000,
             response_mime_type="application/json",
@@ -45,11 +40,13 @@ class GeminiProvider(BaseLLMProvider):
 
     def _check_truncation(self, response, bank_name: str):
         """Raise if Gemini hit MAX_TOKENS."""
+        # In the new SDK, response structure is slightly different.
+        # response.candidates[0].finish_reason
+        if not response.candidates:
+            return
+
         candidate = response.candidates[0]
-        if hasattr(candidate, "finish_reason") and (
-            candidate.finish_reason == 2
-            or getattr(candidate.finish_reason, "name", "") == "MAX_TOKENS"
-        ):
+        if candidate.finish_reason == "MAX_TOKENS":
             raise RuntimeError(
                 f"[{bank_name}] Gemini response truncated (MAX_TOKENS). "
                 "Try chunks mode or a model with higher output token limit."
@@ -66,19 +63,23 @@ class GeminiProvider(BaseLLMProvider):
     ) -> list[dict]:
         """Send each page image in a separate request; merge results."""
         all_transactions: list[dict] = []
-        gemini_model = self._make_model(system_prompt)
+        config = self._get_config(system_prompt)
 
         for page_idx, b64 in enumerate(pages_b64):
             logger.info(
                 f"[{bank_name}] Gemini chunks: page {page_idx + 1}/{len(pages_b64)}"
             )
-            content = [prompt, {"mime_type": "image/jpeg", "data": b64}]
+            content = [
+                types.Part.from_bytes(data=b64, mime_type="image/jpeg"),
+                prompt
+            ]
             self._log_payload(content, system_prompt)
 
             response = await asyncio.to_thread(
-                gemini_model.generate_content,
-                content,
-                generation_config=self._gen_config,
+                self.client.models.generate_content,
+                model=self.model,
+                contents=content,
+                config=config,
             )
             self._check_truncation(response, bank_name)
             raw = response.text
@@ -102,18 +103,19 @@ class GeminiProvider(BaseLLMProvider):
         logger.info(
             f"[{bank_name}] Gemini images: sending {len(pages_b64)} pages in one request"
         )
-        gemini_model = self._make_model(system_prompt)
+        config = self._get_config(system_prompt)
 
         content: list[Any] = [prompt]
         for b64 in pages_b64:
-            content.append({"mime_type": "image/jpeg", "data": b64})
+            content.append(types.Part.from_bytes(data=b64, mime_type="image/jpeg"))
 
         self._log_payload(content, system_prompt)
 
         response = await asyncio.to_thread(
-            gemini_model.generate_content,
-            content,
-            generation_config=self._gen_config,
+            self.client.models.generate_content,
+            model=self.model,
+            contents=content,
+            config=config,
         )
         self._check_truncation(response, bank_name)
         raw = response.text
@@ -143,16 +145,18 @@ class GeminiProvider(BaseLLMProvider):
 
             # Upload (blocking; run in thread to keep async)
             uploaded_file = await asyncio.to_thread(
-                genai.upload_file,
+                self.client.files.upload,
                 path=tmp_path,
-                mime_type="application/pdf",
-                display_name=f"{bank_name}_statement.pdf",
+                config=types.UploadFileConfig(
+                    mime_type="application/pdf",
+                    display_name=f"{bank_name}_statement.pdf",
+                )
             )
             logger.info(
                 f"[{bank_name}] Gemini file uploaded: {uploaded_file.name} ({uploaded_file.uri})"
             )
 
-            gemini_model = self._make_model(system_prompt)
+            config = self._get_config(system_prompt)
             content = [uploaded_file, prompt]
 
             self._log_payload(
@@ -161,9 +165,10 @@ class GeminiProvider(BaseLLMProvider):
             )
 
             response = await asyncio.to_thread(
-                gemini_model.generate_content,
-                content,
-                generation_config=self._gen_config,
+                self.client.models.generate_content,
+                model=self.model,
+                contents=content,
+                config=config,
             )
             self._check_truncation(response, bank_name)
             raw = response.text
@@ -177,7 +182,7 @@ class GeminiProvider(BaseLLMProvider):
             # Delete from Gemini File API to avoid quota build-up
             if uploaded_file:
                 try:
-                    await asyncio.to_thread(genai.delete_file, uploaded_file.name)
+                    await asyncio.to_thread(self.client.files.delete, name=uploaded_file.name)
                     logger.info(f"[{bank_name}] Deleted uploaded Gemini file: {uploaded_file.name}")
                 except Exception as del_err:
                     logger.warning(f"[{bank_name}] Could not delete Gemini file {uploaded_file.name}: {del_err}")
@@ -189,8 +194,10 @@ class GeminiProvider(BaseLLMProvider):
             log_parts = []
             if isinstance(content, list):
                 for part in content:
-                    if isinstance(part, dict) and "data" in part:
-                        log_parts.append({"type": "image", "data": "[HIDDEN BASE64]"})
+                    if hasattr(part, "data") and part.data:
+                        log_parts.append({"type": "image", "data": "[HIDDEN BYTES]"})
+                    elif hasattr(part, "text") and part.text:
+                        log_parts.append({"type": "text", "text": part.text})
                     elif isinstance(part, str):
                         log_parts.append({"type": "text", "text": part})
                     else:
@@ -198,6 +205,7 @@ class GeminiProvider(BaseLLMProvider):
             else:
                 log_parts = [str(content)]
 
+            import json
             logger.debug(
                 f"LLM REQUEST (GEMINI / {self.model}):\n"
                 + json.dumps(

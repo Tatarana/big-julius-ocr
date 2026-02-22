@@ -17,3 +17,5 @@ pytest-cov>=4.1.0
 tenacity>=8.2.3
 pdfplumber>=0.10.0
 google-genai
+google-cloud-aiplatform>=1.60.0
+google-cloud-storage>=2.14.0

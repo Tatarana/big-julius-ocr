@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     SECOND_LLM_PROVIDER: str = "google"
     SECOND_LLM_MODEL: str = "gemini-3-pro-image-preview"
 
+    # Vertex AI Batch (optional — only needed when using batch mode)
+    VERTEX_PROJECT_ID: Optional[str] = None
+    VERTEX_LOCATION: str = "us-central1"
+    VERTEX_MODEL: str = "publishers/google/models/gemini-2.0-flash-001"
+    GCS_BUCKET: Optional[str] = None
+    GCS_BATCH_PREFIX: str = "batch-jobs"
+    VERTEX_BATCH_POLL_INTERVAL: int = 60  # seconds between status checks
+
     # AWS
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str

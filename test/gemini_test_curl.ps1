@@ -1,24 +1,25 @@
-# Gemini API Test Script (PowerShell)
-# Replicates the exact request logic used in the app for:
-# Provider: Google Gemini
-# Model: gemini-3.1-pro-preview
-# File: .\temp\PicPay_Fatura_122025.pdf
-# Mode: PDF (Direct upload)
+function Log($msg) {
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+    Write-Host "[$timestamp] $msg"
+}
 
-$apiKey = "AIzaSyBkWIGmUIWm2VTj5oRITDkiuUlSBzYoGiY"
+Log "Starting Gemini API Test Script..."
+
+$apiKey = ""
 if (-not $apiKey) {
-    Write-Host "Error: GOOGLE_API_KEY environment variable not set." -ForegroundColor Red
+    Log "Error: GOOGLE_API_KEY not found."
     exit
 }
 
 $filePath = "PicPay_Fatura_122025.pdf"
 if (-not (Test-Path $filePath)) {
-    Write-Host "Error: File not found at $filePath" -ForegroundColor Red
+    Log "Error: File not found at $filePath"
     exit
 }
 
-Write-Host "Preparing Base64 encoding for $filePath..."
+Log "Preparing Base64 encoding for $filePath..."
 $base64File = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path $filePath)))
+Log "Base64 encoding complete ($( $base64File.Length ) chars)."
 
 # --- SYSTEM PROMPT (from app/prompts/config.yaml) ---
 $systemPrompt = @"
@@ -66,38 +67,46 @@ Rules: (1) amounts/balance must be NUMBERS with dot decimal. (2) DD-MM-YYYY form
 "@
 
 # --- API BODY ---
-# Using v1beta for gemini-3.1-pro-preview support
-# Note: Using inlineData to simulate the payload directness
 $body = @{
     system_instruction = @{
         parts = @( @{ text = $systemPrompt } )
     }
-    contents = @(
+    contents           = @(
         @{
             parts = @(
                 @{ text = $userPrompt },
                 @{
                     inlineData = @{
                         mimeType = "application/pdf"
-                        data = $base64File
+                        data     = $base64File
                     }
                 }
             )
         }
     )
-    generationConfig = @{
+    generationConfig   = @{
         responseMimeType = "application/json"
-        temperature = 0
-        maxOutputTokens = 50000
+        temperature      = 0
+        maxOutputTokens  = 50000
     }
 } | ConvertTo-Json -Depth 10
 
 $tempFile = "gemini_request.json"
+Log "Saving request body to $tempFile..."
 $body | Set-Content -Path $tempFile -Encoding utf8
 
-Write-Host "Sending request to Gemini API (reading from temp file to avoid 'extension too long' error)..."
-curl.exe -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=$apiKey" `
-  -H "Content-Type: application/json" `
-  -d "@$tempFile"
+Log "Sending request to Gemini API (models/gemini-3.1-pro-preview)..."
+$startTime = Get-Date
 
+curl.exe -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=$apiKey" `
+    -H "Content-Type: application/json" `
+    -d "@$tempFile"
+
+$endTime = Get-Date
+$duration = $endTime - $startTime
+Log "Request complete."
+Log "Total duration: $( [Math]::Round($duration.TotalSeconds, 2) ) seconds."
+
+Log "Cleaning up temporary files..."
 Remove-Item $tempFile
+Log "Done."

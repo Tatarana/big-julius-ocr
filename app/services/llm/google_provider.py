@@ -2,12 +2,13 @@
 app/services/llm/google_provider.py
 
 Google Gemini provider — supports 'chunks', 'images', and 'pdf' send modes.
-Using the new unified google-genai SDK.
+Using the new unified google-genai SDK with native async methods (client.aio.*).
 """
-import asyncio
 import tempfile
 import os
 from typing import Any
+
+import httpx
 
 from google import genai
 from google.genai import types
@@ -26,7 +27,20 @@ class GeminiProvider(BaseLLMProvider):
 
     def __init__(self, model: str):
         self.model = model
-        self.client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+        # Use native async methods (client.aio.*) to guarantee the httpx async
+        # transport is used. The asyncio.to_thread approach called the sync
+        # client whose timeout path is separate and unreliable.
+        #
+        # We pass an explicit httpx_async_client so the SDK never falls back
+        # to aiohttp (which has its own 300-second default read timeout and
+        # ignores HttpOptions.timeout entirely).
+        self.client = genai.Client(
+            api_key=settings.GOOGLE_API_KEY,
+            http_options=types.HttpOptions(
+                timeout=600000,  # ms — passed to httpx per-request
+                httpx_async_client=httpx.AsyncClient(timeout=600.0),
+            ),
+        )
 
     # ----------------------------------------------------------------- helpers
 
@@ -40,8 +54,6 @@ class GeminiProvider(BaseLLMProvider):
 
     def _check_truncation(self, response, bank_name: str):
         """Raise if Gemini hit MAX_TOKENS."""
-        # In the new SDK, response structure is slightly different.
-        # response.candidates[0].finish_reason
         if not response.candidates:
             return
 
@@ -75,8 +87,8 @@ class GeminiProvider(BaseLLMProvider):
             ]
             self._log_payload(content, system_prompt)
 
-            response = await asyncio.to_thread(
-                self.client.models.generate_content,
+            # Use native async API (client.aio.models) — respects httpx timeout
+            response = await self.client.aio.models.generate_content(
                 model=self.model,
                 contents=content,
                 config=config,
@@ -111,8 +123,8 @@ class GeminiProvider(BaseLLMProvider):
 
         self._log_payload(content, system_prompt)
 
-        response = await asyncio.to_thread(
-            self.client.models.generate_content,
+        # Use native async API (client.aio.models) — respects httpx timeout
+        response = await self.client.aio.models.generate_content(
             model=self.model,
             contents=content,
             config=config,
@@ -143,10 +155,9 @@ class GeminiProvider(BaseLLMProvider):
                 tmp.write(pdf_bytes)
                 tmp_path = tmp.name
 
-            # Upload (blocking; run in thread to keep async)
-            uploaded_file = await asyncio.to_thread(
-                self.client.files.upload,
-                path=tmp_path,
+            # Use native async API (client.aio.files) — respects httpx timeout
+            uploaded_file = await self.client.aio.files.upload(
+                file=tmp_path,
                 config=types.UploadFileConfig(
                     mime_type="application/pdf",
                     display_name=f"{bank_name}_statement.pdf",
@@ -164,8 +175,8 @@ class GeminiProvider(BaseLLMProvider):
                 system_prompt,
             )
 
-            response = await asyncio.to_thread(
-                self.client.models.generate_content,
+            # Use native async API (client.aio.models) — respects httpx timeout
+            response = await self.client.aio.models.generate_content(
                 model=self.model,
                 contents=content,
                 config=config,
@@ -182,7 +193,7 @@ class GeminiProvider(BaseLLMProvider):
             # Delete from Gemini File API to avoid quota build-up
             if uploaded_file:
                 try:
-                    await asyncio.to_thread(self.client.files.delete, name=uploaded_file.name)
+                    await self.client.aio.files.delete(name=uploaded_file.name)
                     logger.info(f"[{bank_name}] Deleted uploaded Gemini file: {uploaded_file.name}")
                 except Exception as del_err:
                     logger.warning(f"[{bank_name}] Could not delete Gemini file {uploaded_file.name}: {del_err}")

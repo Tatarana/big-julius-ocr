@@ -74,10 +74,41 @@ async def check_all_connections():
     llm_status = await llm_service.check_connection()
     s3_status = s3_service.check_connection()
 
+    # Vertex AI check (only if configured)
+    vertex_status = None
+    if settings.VERTEX_PROJECT_ID and settings.GCS_BUCKET:
+        try:
+            from google.cloud import storage as gcs_storage
+            from google.cloud import aiplatform
+
+            # 1. Check GCS bucket access
+            client = gcs_storage.Client(project=settings.VERTEX_PROJECT_ID)
+            bucket = client.bucket(settings.GCS_BUCKET)
+            bucket.reload()  # throws if bucket doesn't exist or no access
+
+            # 2. Check Vertex AI API access
+            aiplatform.init(
+                project=settings.VERTEX_PROJECT_ID,
+                location=settings.VERTEX_LOCATION,
+            )
+
+            vertex_status = ServiceStatus(
+                status="connected",
+                latency_ms=0,
+                message=f"project={settings.VERTEX_PROJECT_ID}, bucket={settings.GCS_BUCKET}",
+            )
+        except Exception as e:
+            vertex_status = ServiceStatus(
+                status="disconnected",
+                latency_ms=0,
+                message=str(e) or repr(e),
+            )
+
     return ConnectionCheckResponse(
         google_drive=ServiceStatus(status="connected" if drive_status else "disconnected", latency_ms=0),
         llm_api=ServiceStatus(status="connected" if llm_status else "disconnected", latency_ms=0),
         aws_s3=ServiceStatus(status="connected" if s3_status else "disconnected", latency_ms=0),
+        vertex_ai=vertex_status,
         timestamp=datetime.utcnow()
     )
 

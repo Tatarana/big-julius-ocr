@@ -7,7 +7,9 @@ Compatibility shim retained for:
 
 All actual LLM calls now go through app.services.llm (provider package).
 """
+import httpx
 from google import genai
+from google.genai import types
 from openai import AsyncOpenAI
 from app.utils.config import settings
 from app.utils.logger import logger
@@ -23,7 +25,13 @@ class LLMService:
             )
         self._google_client = None
         if settings.GOOGLE_API_KEY:
-            self._google_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+            self._google_client = genai.Client(
+                api_key=settings.GOOGLE_API_KEY,
+                http_options=types.HttpOptions(
+                    timeout=600000,
+                    httpx_async_client=httpx.AsyncClient(timeout=600.0),
+                ),
+            )
 
     async def check_connection(self) -> bool:
         """Health-check: returns True if at least one configured provider is reachable."""

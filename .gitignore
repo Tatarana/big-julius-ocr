@@ -14,3 +14,5 @@ htmlcov/
 credentials.json
 credentials/
 app/temp
+test/gemini_test_curl.ps1
+test/

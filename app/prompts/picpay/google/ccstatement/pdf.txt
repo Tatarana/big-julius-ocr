@@ -19,6 +19,7 @@ TRANSACTION FORMAT: DD/MM DESCRIPTION VALUE
 date = DD/MM → DD-MM-YYYY (use closing year)
 description = text between date and value
 amount = last numeric value (negative for purchases, positive for CASHBACK/ESTORNO/CREDITO/PAGAMENTO RECEBIDO)
+onwer = the name of the owner of the card, usually appears in the first page of the document. if not found, use "not found" 
 
 INSTALLMENTS: Pattern PARCXX/YY → installments: "[XX/YY]", remove from description.
 CATEGORIES: RESTAURANTE→Restaurante, MERCADO→Mercado, DROGARIA→Saúde, POSTO→Combustivel, AMAZON/SHOPPIN→Compras, ESTACIONAMENTO→Transporte, LATAM/GOL/HOTEL→Viagem, SEGUROS→Seguros, CASHBACK→Crédito, default→Outros
@@ -28,7 +29,7 @@ RECONCILIATION: Compute NET_TOTAL = sum(abs(negatives)) - sum(positives). Compar
 OUTPUT: Return ONLY a valid JSON object. Minify.
 {
   "transactions": [
-    {"date": "DD-MM-YYYY", "description": "text", "installments": "[XX/YY]", "amount": -123.45, "balance": 0, "category": "category name"}
+    {"date": "DD-MM-YYYY", "description": "text", "installments": "[XX/YY]", "amount": -123.45, "balance": 0, "category": "category name", "owner": "owner name"}
   ]
 }
 Rules: (1) amounts/balance must be NUMBERS with dot decimal. (2) DD-MM-YYYY format. (3) No markdown. (4) ONLY the JSON object.

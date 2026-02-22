@@ -14,6 +14,7 @@ from app.utils.logger import logger
 from app.utils.config import settings
 from app.services.job_registry import job_registry
 from app.api.models import JobStatus
+from app.services.vertex_batch_service import vertex_batch_service, BatchFileEntry
 
 
 class OCRProcessor:
@@ -306,8 +307,13 @@ class OCRProcessor:
             }
 
         except Exception as e:
-            logger.error(f"❌ Error processing {file_name} ({file_id}): {e}")
-            return {"file_id": file_id, "status": "failed", "error": str(e)}
+            error_detail = str(e) or repr(e)
+            logger.error(
+                f"❌ Error processing {file_name} ({file_id}): "
+                f"[{type(e).__name__}] {error_detail}",
+                exc_info=True,
+            )
+            return {"file_id": file_id, "status": "failed", "error": error_detail}
 
     async def process_folder(
         self,
@@ -332,6 +338,21 @@ class OCRProcessor:
             if job_id:
                 job_registry.update_job(job_id, total_files=len(files))
 
+            # ── Vertex AI Batch path ──────────────────────────────────────────
+            # Use when: provider=google, mode=pdf, Vertex AI env vars are set.
+            use_vertex_batch = (
+                llm_provider == "google"
+                and send_mode == "pdf"
+                and bool(settings.VERTEX_PROJECT_ID)
+                and bool(settings.GCS_BUCKET)
+            )
+
+            if use_vertex_batch:
+                return await self._process_folder_vertex_batch(
+                    files, job_id, llm_model
+                )
+
+            # ── Standard per-file path (all other cases) ──────────────────────
             results = []
             for i, file in enumerate(files, 1):
                 logger.info(f"--- Processing file {i}/{len(files)}: {file.name} ---")
@@ -368,6 +389,59 @@ class OCRProcessor:
             logger.error(f"Error in process_folder: {e}")
             if job_id:
                 job_registry.update_job(job_id, status=JobStatus.FAILED, errors=[str(e)])
+            raise
+
+    async def _process_folder_vertex_batch(
+        self,
+        files: list,
+        job_id: str,
+        llm_model: str | None,
+    ):
+        """
+        Download all files, build BatchFileEntry list, then hand off to
+        vertex_batch_service which handles the full async lifecycle.
+        """
+        logger.info(
+            f"[Job {job_id}] Using Vertex AI Batch path for {len(files)} files."
+        )
+        try:
+            entries: list[BatchFileEntry] = []
+            for i, file in enumerate(files, 1):
+                logger.info(f"[Job {job_id}] Downloading {i}/{len(files)}: {file.name}")
+                pdf_bytes = drive_service.download_file(file.id)
+
+                bank = self.detect_bank(file.name)
+                if bank == "unknown":
+                    logger.warning(f"[Job {job_id}] Unknown bank for {file.name} — skipping.")
+                    continue
+
+                stmt_type = self.detect_type(file.name)
+                user_prompt, sys_prompt = self._resolve_prompt(
+                    bank, "google", stmt_type, "pdf"
+                )
+
+                entries.append(BatchFileEntry(
+                    file_id=file.id,
+                    file_name=file.name,
+                    bank=bank,
+                    stmt_type=stmt_type,
+                    pdf_bytes=pdf_bytes,
+                    user_prompt=user_prompt,
+                    system_prompt=sys_prompt,
+                ))
+
+            if not entries:
+                logger.error(f"[Job {job_id}] No valid files to batch — aborting.")
+                job_registry.update_job(job_id, status=JobStatus.FAILED,
+                                        errors=["No files with known bank detected."])
+                return []
+
+            # Delegate to the batch service — this blocks (polls) until done
+            await vertex_batch_service.run_batch_job(entries, job_id)
+
+        except Exception as exc:
+            logger.error(f"[Job {job_id}] Vertex AI Batch failed: {exc}")
+            job_registry.update_job(job_id, status=JobStatus.FAILED, errors=[str(exc)])
             raise
 
 

@@ -79,4 +79,5 @@ class ConnectionCheckResponse(BaseModel):
     google_drive: ServiceStatus
     llm_api: ServiceStatus
     aws_s3: ServiceStatus
+    vertex_ai: Optional[ServiceStatus] = None
     timestamp: datetime

@@ -4,7 +4,6 @@ python-multipart>=0.0.9
 google-api-python-client>=2.118.0
 google-auth-httplib2>=0.2.0
 google-auth-oauthlib>=1.2.0
-openai>=1.12.0
 boto3>=1.34.40
 pydantic>=2.6.1
 pydantic-settings>=2.1.0
@@ -15,7 +14,5 @@ python-dotenv>=1.0.1
 pytest>=8.0.0
 pytest-cov>=4.1.0
 tenacity>=8.2.3
-pdfplumber>=0.10.0
-google-genai
 google-cloud-aiplatform>=1.60.0
 google-cloud-storage>=2.14.0

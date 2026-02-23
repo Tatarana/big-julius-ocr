@@ -11,12 +11,6 @@ class JobStatus(str, Enum):
     FAILED = "failed"
 
 
-class SendMode(str, Enum):
-    CHUNKS = "chunks"     # PDF → N images → N separate LLM calls → merge
-    IMAGES = "images"     # PDF → all images → 1 LLM call
-    PDF = "pdf"           # raw PDF → 1 LLM call (Google only)
-
-
 class JobStatusResponse(BaseModel):
     job_id: str
     status: JobStatus
@@ -30,9 +24,8 @@ class JobStatusResponse(BaseModel):
 
 
 class ProcessFilesRequest(BaseModel):
-    llm_provider: str = "google"                        # "openai" | "google"
-    llm_model: str = "gemini-3.1-pro-preview"           # override anytime
-    send_mode: SendMode = SendMode.PDF                  # "chunks" | "images" | "pdf"
+    """No parameters needed — always uses Vertex AI Batch + PDF mode."""
+    pass
 
 
 class JobStats(BaseModel):
@@ -53,7 +46,7 @@ class FileMetadata(BaseModel):
     name: str
     size: str
     created_time: datetime
-    status: str = "pending"  # pending, processing, processed, failed
+    status: str = "pending"
 
 
 class Transaction(BaseModel):
@@ -77,7 +70,6 @@ class ServiceStatus(BaseModel):
 
 class ConnectionCheckResponse(BaseModel):
     google_drive: ServiceStatus
-    llm_api: ServiceStatus
     aws_s3: ServiceStatus
-    vertex_ai: Optional[ServiceStatus] = None
+    vertex_ai: ServiceStatus
     timestamp: datetime

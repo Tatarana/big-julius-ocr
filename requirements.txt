@@ -16,3 +16,4 @@ pytest-cov>=4.1.0
 tenacity>=8.2.3
 google-cloud-aiplatform>=1.60.0
 google-cloud-storage>=2.14.0
+pypdf>=4.0.0

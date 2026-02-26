@@ -12,9 +12,9 @@ def test_job_registry_lifecycle():
     assert status.status == JobStatus.PENDING
     
     # 2. Update status
-    job_registry.update_job(job_id, status=JobStatus.PROCESSING, total_files=5)
+    job_registry.update_job(job_id, status=JobStatus.EXTRACTING, total_files=5)
     status = job_registry.get_job(job_id)
-    assert status.status == JobStatus.PROCESSING
+    assert status.status == JobStatus.EXTRACTING
     assert status.total_files == 5
     
     # 3. Update progress

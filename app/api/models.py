@@ -6,7 +6,10 @@ from enum import Enum
 
 class JobStatus(str, Enum):
     PENDING = "pending"
-    PROCESSING = "processing"
+    DOWNLOADING = "downloading"
+    EXTRACTING = "extracting"
+    BUILDING_CSV = "building_csv"
+    UPLOADING = "uploading"
     COMPLETED = "completed"
     FAILED = "failed"
 

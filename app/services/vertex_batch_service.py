@@ -68,6 +68,7 @@ class VertexBatchService:
                             }
                         },
                         {"text": entry.user_prompt},
+                        {"text": f"__TRACK__:{entry.file_id}"},
                     ],
                 }
             ],
@@ -115,12 +116,12 @@ class VertexBatchService:
     def _download_output_jsonl(self, output_directory: str) -> list[dict]:
         """Download all prediction JSONL files from the output GCS directory."""
         prefix = output_directory
-        if prefix.startswith("gs://"):
-            parts = prefix[len("gs://"):].split("/", 1)
-            bucket_name = parts[0]
-            prefix_path = parts[1] if len(parts) > 1 else ""
-        else:
-            raise ValueError(f"Unexpected output directory format: {output_directory}")
+        if not prefix or not isinstance(prefix, str) or not prefix.startswith("gs://"):
+            raise ValueError(f"Invalid or missing GCS output directory: {output_directory}")
+
+        parts = prefix[len("gs://"):].split("/", 1)
+        bucket_name = parts[0]
+        prefix_path = parts[1] if len(parts) > 1 else ""
 
         gcs = self._gcs_client()
         bucket = gcs.bucket(bucket_name)
@@ -147,6 +148,18 @@ class VertexBatchService:
         except (KeyError, IndexError, TypeError):
             logger.warning(f"Could not extract text from response row: {list(row.keys())}")
             return None
+
+    def _extract_file_id_from_row(self, row: dict) -> str | None:
+        """Extract the __TRACK__ file_id tag from a batch output row's request."""
+        try:
+            parts = row.get("request", {}).get("contents", [{}])[0].get("parts", [])
+            for part in parts:
+                text = part.get("text")
+                if isinstance(text, str) and text.startswith("__TRACK__:"):
+                    return text.split(":", 1)[1]
+        except (KeyError, IndexError, TypeError):
+            pass
+        return None
 
     def _parse_transactions(self, raw: str, bank: str) -> list[dict]:
         """Parse LLM JSON response into a list of transaction dicts."""
@@ -332,31 +345,49 @@ class VertexBatchService:
             f"{len(classify_rows)} classify rows, {len(extract_rows)} extract rows"
         )
 
-        # ── Parse classify results ────────────────────────────────────────
-        metadata_list: list[dict] = []
-        for i, row in enumerate(classify_rows):
-            raw = self._extract_text_from_response(row)
-            if raw:
-                meta = self._parse_metadata(raw)
-            else:
-                meta = {"bank": "unknown", "doc_type": "bankstatement", "owner": "unknown"}
-            logger.info(
-                f"{step}[Job {job_id}] Classify result [{i}] "
-                f"{classify_entries[i].file_name}: {meta}"
-            )
-            metadata_list.append(meta)
+        # ── Parse classify results (match by file_id, not position) ─────
+        classify_entry_map = {e.file_id: e for e in classify_entries}
+        metadata_map: dict[str, dict] = {}
+        defaults = {"bank": "unknown", "doc_type": "bankstatement", "owner": "unknown"}
 
-        # ── Build CSVs using both results ─────────────────────────────────
+        for row in classify_rows:
+            file_id = self._extract_file_id_from_row(row)
+            raw = self._extract_text_from_response(row)
+            meta = self._parse_metadata(raw) if raw else dict(defaults)
+
+            if file_id:
+                entry = classify_entry_map.get(file_id)
+                fname = entry.file_name if entry else file_id
+                logger.info(
+                    f"{step}[Job {job_id}] Classify result "
+                    f"{fname}: {meta}"
+                )
+                metadata_map[file_id] = meta
+            else:
+                logger.warning(
+                    f"{step}[Job {job_id}] Could not extract file_id from "
+                    f"classify output row — result will be unmatched: {meta}"
+                )
+
+        # ── Build CSVs (match extract rows by file_id) ────────────────────
         job_registry.update_job(job_id, status=JobStatus.BUILDING_CSV)
 
         extraction_date = datetime.now().strftime("%Y-%m-%d")
         ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        extract_entry_map = {e.file_id: e for e in extract_entries}
         results = []
 
-        for i, (entry, tx_row) in enumerate(zip(extract_entries, extract_rows)):
-            meta = metadata_list[i] if i < len(metadata_list) else {
-                "bank": "unknown", "doc_type": "bankstatement", "owner": "unknown"
-            }
+        for tx_row in extract_rows:
+            file_id = self._extract_file_id_from_row(tx_row)
+            if not file_id or file_id not in extract_entry_map:
+                logger.warning(
+                    f"{step}[Job {job_id}] Could not match extract output "
+                    f"row to an input file (file_id={file_id})"
+                )
+                continue
+
+            entry = extract_entry_map[file_id]
+            meta = metadata_map.get(file_id, dict(defaults))
             bank = meta["bank"]
             doc_type = meta["doc_type"]
             owner = meta["owner"]

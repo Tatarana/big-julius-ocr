@@ -60,6 +60,77 @@ class TestParseMetadata:
         assert result["owner"] == "unknown"
 
 
+class TestExtractFileIdFromRow:
+    """Test the _extract_file_id_from_row helper that matches output rows to input files."""
+
+    def setup_method(self):
+        self.svc = VertexBatchService()
+
+    def test_extract_valid_file_id(self):
+        row = {
+            "request": {
+                "contents": [{
+                    "role": "user",
+                    "parts": [
+                        {"inline_data": {"mime_type": "application/pdf", "data": "..."}},
+                        {"text": "classify this document"},
+                        {"text": "__TRACK__:abc123"},
+                    ]
+                }]
+            },
+            "response": {"candidates": []}
+        }
+        assert self.svc._extract_file_id_from_row(row) == "abc123"
+
+    def test_extract_file_id_with_colons(self):
+        """file_id may contain colons — only split on the first one."""
+        row = {
+            "request": {
+                "contents": [{
+                    "role": "user",
+                    "parts": [
+                        {"text": "__TRACK__:id:with:colons"},
+                    ]
+                }]
+            }
+        }
+        assert self.svc._extract_file_id_from_row(row) == "id:with:colons"
+
+    def test_missing_track_tag_returns_none(self):
+        row = {
+            "request": {
+                "contents": [{
+                    "role": "user",
+                    "parts": [
+                        {"text": "just a normal prompt"},
+                    ]
+                }]
+            }
+        }
+        assert self.svc._extract_file_id_from_row(row) is None
+
+    def test_extract_file_id_with_null_text(self):
+        """Vertex AI might return parts with 'text': null, which should be ignored."""
+        row = {
+            "request": {
+                "contents": [{
+                    "role": "user",
+                    "parts": [
+                        {"inline_data": {"mime_type": "application/pdf", "data": "..."}},
+                        {"text": None},
+                        {"text": "__TRACK__:xyz789"},
+                    ]
+                }]
+            }
+        }
+        assert self.svc._extract_file_id_from_row(row) == "xyz789"
+
+    def test_malformed_row_returns_none(self):
+        assert self.svc._extract_file_id_from_row({}) is None
+        assert self.svc._extract_file_id_from_row({"request": {}}) is None
+        assert self.svc._extract_file_id_from_row({"request": {"contents": []}}) is None
+
+
 class TestDetectTypeFromFilename:
     """Test the filename heuristic used for prompt selection."""
 

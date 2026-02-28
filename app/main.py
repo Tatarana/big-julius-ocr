@@ -20,8 +20,8 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    from datetime import datetime
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    from datetime import datetime, timezone
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # Include routers
 app.include_router(endpoints.router)

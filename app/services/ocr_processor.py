@@ -46,7 +46,10 @@ class OCRProcessor:
 
     def _get_classify_system_prompt(self) -> str:
         return (
-            "Classify this financial document. Respond ONLY with a JSON object. "
+            "Classify this financial document by carefully reading the text in the PDF. "
+            "Base your classification ONLY on explicit text found in the document. "
+            "Do NOT guess the bank from layout or visual cues. "
+            "Respond ONLY with a JSON object. "
             "Minify output (no whitespace)."
         )
 

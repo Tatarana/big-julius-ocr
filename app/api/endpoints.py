@@ -87,11 +87,12 @@ async def check_all_connections():
             message=str(e) or repr(e),
         )
 
+    from datetime import timezone
     return ConnectionCheckResponse(
         google_drive=ServiceStatus(status="connected" if drive_status else "disconnected", latency_ms=0),
         aws_s3=ServiceStatus(status="connected" if s3_status else "disconnected", latency_ms=0),
         vertex_ai=vertex_status,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 

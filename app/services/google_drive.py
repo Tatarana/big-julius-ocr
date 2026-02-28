@@ -26,7 +26,7 @@ class GoogleDriveService:
     def list_files_in_folder(self, folder_id: str) -> list[FileMetadata]:
         try:
             service = self.get_service()
-            query = f"'{folder_id}' in parents and trashed = false"
+            query = f"'{folder_id}' in parents and trashed = false and mimeType = 'application/pdf'"
             results = service.files().list(
                 q=query,
                 pageSize=100,

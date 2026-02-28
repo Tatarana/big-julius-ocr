@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from app.api.models import JobStatus, JobStatusResponse
 
@@ -7,7 +7,7 @@ class JobRegistry:
         self._jobs: Dict[str, Dict[str, Any]] = {}
 
     def create_job(self, job_id: str):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         self._jobs[job_id] = {
             "job_id": job_id,
             "status": JobStatus.PENDING,
@@ -23,7 +23,7 @@ class JobRegistry:
     def update_job(self, job_id: str, **kwargs):
         if job_id in self._jobs:
             self._jobs[job_id].update(kwargs)
-            self._jobs[job_id]["updated_at"] = datetime.utcnow()
+            self._jobs[job_id]["updated_at"] = datetime.now(timezone.utc)
 
     def get_job(self, job_id: str) -> Optional[JobStatusResponse]:
         job_data = self._jobs.get(job_id)

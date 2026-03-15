@@ -180,8 +180,8 @@ class VertexBatchService:
             return []
 
     def _parse_metadata(self, raw: str) -> dict:
-        """Parse the classify-batch LLM response into bank/doc_type/owner."""
-        defaults = {"bank": "unknown", "doc_type": "bankstatement", "owner": "unknown"}
+        """Parse the classify-batch LLM response into bank/doc_type/owner/payment_date."""
+        defaults = {"bank": "unknown", "doc_type": "bankstatement", "owner": "unknown", "payment_date": ""}
         try:
             clean = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.MULTILINE)
             clean = re.sub(r"\s*```$", "", clean, flags=re.MULTILINE)
@@ -191,23 +191,26 @@ class VertexBatchService:
                     "bank": str(data.get("bank", "unknown")).lower().strip(),
                     "doc_type": str(data.get("doc_type", "bankstatement")).lower().strip(),
                     "owner": str(data.get("owner", "unknown")).strip(),
+                    "payment_date": str(data.get("payment_date", "")).strip(),
                 }
         except json.JSONDecodeError as exc:
             logger.error(f"[Classify] JSON parse error: {exc}\nRaw: {raw[:300]}")
         return defaults
 
     def _transactions_to_csv(
-        self, transactions: list[dict], bank: str, doc_type: str, owner: str, extraction_date: str
+        self, transactions: list[dict], bank: str, doc_type: str, owner: str,
+        extraction_date: str, payment_date: str = "",
     ) -> str:
-        cols = ["bank", "doc_type", "owner", "extraction_date", "date", "description",
-                "installments", "amount", "balance", "category"]
+        cols = ["bank", "doc_type", "owner", "extraction_date", "payment_date",
+                "date", "description", "installments", "amount", "balance", "category"]
         normalized = []
         for tx in transactions:
             norm = {
                 "bank": bank,
                 "doc_type": doc_type,
                 "owner": owner,
-                "extraction_date": extraction_date
+                "extraction_date": extraction_date,
+                "payment_date": payment_date,
             }
             for col in ["date", "description", "installments", "amount", "balance", "category"]:
                 val = tx.get(col, tx.get(col.capitalize(), ""))
@@ -391,6 +394,7 @@ class VertexBatchService:
             bank = meta["bank"]
             doc_type = meta["doc_type"]
             owner = meta["owner"]
+            payment_date = meta.get("payment_date", "")
 
             raw_text = self._extract_text_from_response(tx_row)
             if not raw_text:
@@ -411,7 +415,8 @@ class VertexBatchService:
                 else "credit card statement"
             )
             csv_content = self._transactions_to_csv(
-                transactions, bank, human_doc_type, owner, extraction_date
+                transactions, bank, human_doc_type, owner, extraction_date,
+                payment_date=payment_date,
             )
 
             count = len(transactions)

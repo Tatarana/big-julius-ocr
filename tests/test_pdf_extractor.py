@@ -14,11 +14,12 @@ class TestParseMetadata:
         self.svc = VertexBatchService()
 
     def test_parse_valid_json(self):
-        raw = '{"bank": "itau", "doc_type": "ccstatement", "owner": "FERNANDO REIS"}'
+        raw = '{"bank": "itau", "doc_type": "ccstatement", "owner": "FERNANDO REIS", "payment_date": "15-03-2026"}'
         result = self.svc._parse_metadata(raw)
         assert result["bank"] == "itau"
         assert result["doc_type"] == "ccstatement"
         assert result["owner"] == "FERNANDO REIS"
+        assert result["payment_date"] == "15-03-2026"
 
     def test_parse_with_markdown_fences(self):
         raw = '```json\n{"bank": "picpay", "doc_type": "ccstatement", "owner": "MARIA"}\n```'
@@ -40,6 +41,7 @@ class TestParseMetadata:
         assert result["bank"] == "unknown"
         assert result["doc_type"] == "bankstatement"
         assert result["owner"] == "unknown"
+        assert result["payment_date"] == ""
 
     def test_parse_empty_string_returns_defaults(self):
         raw = ""
@@ -58,6 +60,17 @@ class TestParseMetadata:
         assert result["bank"] == "xp"
         assert result["doc_type"] == "bankstatement"
         assert result["owner"] == "unknown"
+        assert result["payment_date"] == ""
+
+    def test_parse_payment_date_for_cc(self):
+        raw = '{"bank": "xp", "doc_type": "ccstatement", "owner": "ANA", "payment_date": "10-04-2026"}'
+        result = self.svc._parse_metadata(raw)
+        assert result["payment_date"] == "10-04-2026"
+
+    def test_parse_payment_date_empty_for_bankstatement(self):
+        raw = '{"bank": "itau", "doc_type": "bankstatement", "owner": "JOAO", "payment_date": ""}'
+        result = self.svc._parse_metadata(raw)
+        assert result["payment_date"] == ""
 
 
 class TestExtractFileIdFromRow:

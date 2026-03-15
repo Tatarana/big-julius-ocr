@@ -57,9 +57,16 @@ Look for the full name near labels like "Titular", "Nome", "Cliente", or in the 
 Use Initial Caps for the name.
 If not found → owner = "unknown"
 
+─── STEP 4: EXTRACT THE PAYMENT DATE (credit card statements only) ───
+
+If doc_type = "ccstatement", look on the FIRST PAGE for:
+  • "Data do Vencimento" or "Data do Pagamento" followed by a date
+Return the date in DD-MM-YYYY format.
+If doc_type = "bankstatement" or date not found → payment_date = ""
+
 ─── OUTPUT ───
 
 Return ONLY a valid JSON object, minified, with no markdown formatting:
-{"bank": "bank_name", "doc_type": "ccstatement", "owner": "Full Name"}
+{"bank": "bank_name", "doc_type": "ccstatement", "owner": "Full Name", "payment_date": "DD-MM-YYYY"}
 
 All values for bank and doc_type must be lowercase.
